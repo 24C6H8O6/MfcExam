@@ -153,51 +153,94 @@ void CgPrjDlg::OnDestroy()
 void CgPrjDlg::OnBnClickedBtnMakeCircle()
 {
 	unsigned char* fm = (unsigned char*)m_pDlgImage->m_Image.GetBits();
-	// 색깔
-	COLORREF color = RGB(0xff, 0xff, 0);
-	// 원 두께
-	int circle_Th = 2;
+
 	// 입력한 반지름 값 가져오기
 	CString n_radius_str;
 	GetDlgItemText(IDC_EDIT_RADIUS, n_radius_str);
 	int n_radius = _ttoi(n_radius_str);
+
 	// 랜덤으로 좌표 설정
 	int x = rand() % (m_pDlgImage->m_Image.GetWidth() - 2 * n_radius) + n_radius;
 	int y = rand() % (m_pDlgImage->m_Image.GetHeight() - 2 * n_radius) + n_radius;
+
 	// DlgImage 크기에 그려지도록 설정
 	if ((x - n_radius < 0) || (y - n_radius < 0) || (x + n_radius > (m_pDlgImage->m_Image.GetWidth())) || (y + n_radius > (m_pDlgImage->m_Image.GetHeight())))
-		AfxMessageBox(_T("원이 이미지 범위를 벗어나 그려지게 됩니다."));
+		AfxMessageBox(_T("원이 이미지 범위를 벗어납니다."));
 	else {
 		memset(fm, 0xff, (m_pDlgImage->m_Image.GetWidth()) * (m_pDlgImage->m_Image.GetHeight()));
+		int nGray = 80;
+		drawInCircle(fm, x, y, n_radius, nGray);
+
 		CClientDC dc(m_pDlgImage);
 		m_pDlgImage->m_Image.Draw(dc, 0, 0);
-		drawCircle(&dc, x, y, n_radius+5, circle_Th, color);
-		color = RGB(0, 0, 0);
-		circle_Th = 1;
-		drawCircle(&dc, x, y, n_radius, circle_Th, color);
-		drawCross(&dc, x, y, n_radius);
+		
+		drawCross(dc, x, y, n_radius);
+		// 바깥 원 색깔
+		COLORREF color = RGB(255, 255, 0);
+		// 바깥 원 두께
+		int outBorder = 2;
+		drawOutCircle(dc, x, y, n_radius + 5, outBorder, color);
+
 	}
 }
 
+// 내부 원 그리기
+void CgPrjDlg::drawInCircle(unsigned char* fm, int x, int y, int nRadius, int nGray)
+{
+	int nPitch = m_pDlgImage->m_Image.GetPitch();
 
-// 십자 표시 그리기
-void CgPrjDlg::drawCross(CDC* pDC, int x, int y, int nRadius) {
-	pDC->MoveTo(x- n_Cross_Size, y);
-	pDC->LineTo(x+ n_Cross_Size+1, y);
-	pDC->MoveTo(x, y- n_Cross_Size);
-	pDC->LineTo(x, y+ n_Cross_Size+3);
+	for (int j = y - nRadius; j <= y + nRadius; j++)
+	{
+		for (int i = x - nRadius; i <= x + nRadius; i++)
+		{
+			if (isInCircle(i, j, x, y, nRadius))
+			{
+				fm[j * nPitch + i] = nGray;
+			}
+		}
+	}
 }
 
-// 원 그리기
-void CgPrjDlg::drawCircle(CDC* pDC, int x, int y, int nRadius, int circle_Th, COLORREF color) {
+bool CgPrjDlg::isInCircle(int i, int j, int nCenterX, int nCenterY, int nRadius)
+{
+	bool bRet = false;
+
+	double dX = i - nCenterX;
+	double dY = j - nCenterY;
+	double dDist = sqrt(dX * dX + dY * dY);
+
+	if (dDist >= nRadius - inBorder && dDist <= nRadius) {
+		bRet = true;
+	}
+
+	return bRet;
+}
+
+// 십자 표시 그리기
+void CgPrjDlg::drawCross(CDC &pDC, int x, int y, int nRadius) {
+	pDC.MoveTo(x- n_Cross_Size, y);
+	pDC.LineTo(x+ n_Cross_Size+1, y);
+	pDC.MoveTo(x, y- n_Cross_Size);
+	pDC.LineTo(x, y+ n_Cross_Size+3);
+}
+
+// 외부 원 그리기
+void CgPrjDlg::drawOutCircle(CDC &pDC, int x, int y, int nRadius, int outBorder, COLORREF color) {
 	CString strX;
 	CString strY;
 	strX.Format(_T("%d"), x);
 	strY.Format(_T("%d"), y);
 	m_edit_X.SetWindowTextW(strX);
 	m_edit_Y.SetWindowTextW(strY);
-	CPen n_Pen(PS_SOLID, circle_Th, color);
-	CPen* pPen = pDC->SelectObject(&n_Pen);
-	pDC->Ellipse(x - nRadius, y - nRadius, x + nRadius, y + nRadius);
-	pDC->SelectObject(pPen);
+	// 원 내부 투명하게 하기
+	CBrush brush;
+	brush.CreateStockObject(NULL_BRUSH);
+	CBrush* pBrush = pDC.SelectObject(&brush);
+	// 펜으로 원 그리기
+	CPen n_Pen(PS_SOLID, outBorder, color);
+	CPen* pPen = pDC.SelectObject(&n_Pen);
+	pDC.Ellipse(x - nRadius - outBorder, y - nRadius - outBorder, x + nRadius + outBorder, y + nRadius + outBorder);
+	pDC.SelectObject(pBrush);
+	pDC.SelectObject(pPen);
 }
+
